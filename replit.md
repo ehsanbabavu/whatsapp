@@ -51,7 +51,12 @@ Preferred communication style: Simple, everyday language.
 - Development and production build processes with esbuild for server bundling
 
 **API Design**
-- RESTful endpoint: `GET /api/whatsapp/qr` returns QR code as PNG image
+- RESTful endpoints:
+  - `GET /api/whatsapp/qr` - Returns QR code as PNG image
+  - `GET /api/whatsapp/status` - Returns current connection status
+  - `GET /api/whatsapp/user` - Returns user information when connected
+  - `POST /api/whatsapp/disconnect` - Disconnects from WhatsApp
+  - `POST /api/whatsapp/wait-login` - Waits for user to scan QR and login
 - No-cache headers to ensure fresh QR codes on each request
 - Error handling with structured JSON error responses
 
@@ -63,9 +68,14 @@ Preferred communication style: Simple, everyday language.
 - Automatic error recovery with page cleanup on failures
 - User-agent spoofing for better compatibility with WhatsApp Web
 - Headless mode with security flags for containerized environments (`--no-sandbox`, `--disable-setuid-sandbox`, etc.)
+- Connection state management to track login status
+- Automatic detection of successful login after QR scan
+- User information extraction from WhatsApp Web interface
 
 **Session Management**
-- In-memory storage implementation (`MemStorage`) for user data
+- In-memory connection state tracking for WhatsApp sessions
+- Real-time connection status monitoring
+- Automatic session cleanup on disconnect
 - Session support infrastructure using `connect-pg-simple` (configured for PostgreSQL sessions)
 - User schema with username/password fields defined via Drizzle ORM
 
@@ -115,9 +125,24 @@ Preferred communication style: Simple, everyday language.
 - Configured with security flags for sandboxed/containerized execution
 - WebGL and GPU acceleration disabled for headless operation
 
-## Recent Updates (November 2024)
+## Recent Updates (November 12, 2024)
 
-**Completed Features**
+**New Features - User Dashboard & Connection Management**
+- ✅ User dashboard page - Displays user information after successful login
+- ✅ Connection state management - Tracks and monitors WhatsApp connection status
+- ✅ Automatic login detection - Waits for QR scan and redirects to dashboard
+- ✅ Smart routing - Automatically redirects based on connection status
+- ✅ Real-time monitoring - Checks connection every 5 seconds
+- ✅ Disconnect functionality - Allows users to manually disconnect from WhatsApp
+- ✅ Auto-redirect on disconnect - Returns to QR page when connection is lost
+
+**API Endpoints**
+- `GET /api/whatsapp/status` - Check current connection status
+- `GET /api/whatsapp/user` - Get connected user information
+- `POST /api/whatsapp/disconnect` - Disconnect from WhatsApp
+- `POST /api/whatsapp/wait-login` - Wait for user to scan QR and login
+
+**Completed Features (Previous)**
 - ✅ Full WhatsApp Web integration with Puppeteer
 - ✅ Dynamic Chromium path detection for Replit environment compatibility
 - ✅ QR code screenshot capture and display
@@ -127,6 +152,9 @@ Preferred communication style: Simple, everyday language.
 - ✅ Loading states and refresh functionality
 
 **Technical Improvements**
+- Content-type validation before JSON parsing to prevent HTML parsing errors
+- Comprehensive error handling for API requests with user-friendly messages
+- Timeout handling for login wait with proper error surfacing
 - Resolved Chromium hard-coded path issue with dynamic detection
 - Fixed navigation timeout by switching from `networkidle0` to `domcontentloaded`
 - Added comprehensive logging for debugging browser automation
@@ -134,5 +162,7 @@ Preferred communication style: Simple, everyday language.
 
 **Known Considerations**
 - QR code fetch may take 30-60 seconds on first request (browser initialization)
-- Occasional transient navigation errors may occur; built-in retry mechanism handles these
+- Login wait has 120-second timeout (will show error if user doesn't scan in time)
+- Connection status stored in-memory (resets on server restart - user must re-scan QR)
+- Real-time monitoring checks status every 5 seconds
 - QR codes expire after a few minutes (WhatsApp limitation); users can refresh via UI button

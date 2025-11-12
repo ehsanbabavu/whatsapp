@@ -1,15 +1,42 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, RefreshCw, QrCode, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 export default function Home() {
   const [qrImage, setQrImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isWaitingForLogin, setIsWaitingForLogin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    checkInitialStatus();
+  }, []);
+
+  const checkInitialStatus = async () => {
+    try {
+      const response = await fetch("/api/whatsapp/status");
+      
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        console.error("Received HTML instead of JSON, skipping status check");
+        return;
+      }
+
+      const data = await response.json();
+      
+      if (data.connected) {
+        navigate("/dashboard");
+      }
+    } catch (err) {
+      console.error("Error checking initial status:", err);
+    }
+  };
 
   const fetchQRCode = async () => {
     setIsLoading(true);
@@ -31,6 +58,8 @@ export default function Home() {
         title: "موفق",
         description: "QR Code با موفقیت دریافت شد",
       });
+
+      waitForUserLogin();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "خطای ناشناخته";
       setError(errorMessage);
@@ -41,6 +70,47 @@ export default function Home() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const waitForUserLogin = async () => {
+    setIsWaitingForLogin(true);
+    
+    try {
+      const response = await fetch("/api/whatsapp/wait-login", {
+        method: "POST",
+      });
+
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("پاسخ نامعتبر از سرور دریافت شد");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "خطا در انتظار برای ورود" }));
+        throw new Error(errorData.error || "خطا در انتظار برای ورود");
+      }
+
+      const data = await response.json();
+      
+      toast({
+        title: "موفق",
+        description: `خوش آمدید ${data.userInfo?.name || ""}!`,
+      });
+
+      navigate("/dashboard");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "خطای ناشناخته";
+      console.error("Login wait error:", err);
+      
+      toast({
+        title: "خطا در ورود",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      
+      setIsWaitingForLogin(false);
+      setError(errorMessage);
     }
   };
 
@@ -106,6 +176,16 @@ export default function Home() {
               </div>
             )}
 
+            {isWaitingForLogin && qrImage && !isLoading && (
+              <Alert className="bg-blue-50 border-blue-200">
+                <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                <AlertDescription className="text-blue-800">
+                  <strong>در انتظار اسکن QR Code...</strong>
+                  <p className="text-sm mt-1">لطفاً کد QR را با تلفن همراه خود اسکن کنید</p>
+                </AlertDescription>
+              </Alert>
+            )}
+
             {qrImage && !isLoading && (
               <div className="space-y-4" data-testid="container-qr-display">
                 <div className="flex justify-center">
@@ -142,7 +222,7 @@ export default function Home() {
                     onClick={handleRefresh}
                     variant="outline"
                     className="w-full"
-                    disabled={isLoading}
+                    disabled={isLoading || isWaitingForLogin}
                     data-testid="button-refresh-qr"
                   >
                     <RefreshCw className="w-4 h-4 ml-2" />
